@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Log Absensi{% endblock %}
+
+{% block head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/log_absen.css') }}">
+{% endblock %}
+
+{% block content %}
+<h1>Log Absensi</h1>
+<p>Di sini Anda dapat melihat log absensi.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Nama Pegawai</th>
+            <th>Tanggal</th>
+            <th>Waktu Masuk</th>
+            <th>Waktu Keluar</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for log in logs %}
+        <tr>
+            <td>{{ log.nama }}</td>
+            <td>{{ log.tanggal }}</td>
+            <td>{{ log.waktu_masuk }}</td>
+            <td>{{ log.waktu_keluar }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

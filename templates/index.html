@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1>Welcome to the Face Recognition System</h1>
+<p class="lead">This system tracks employee attendance using facial recognition.</p>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-calendar-check"></i> Log Absensi
+            </div>
+            <div class="card-body">
+                <p class="card-text">View the attendance log of employees.</p>
+                <a href="/log-absen" class="btn btn-primary">View Log</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-check-circle"></i> Absen
+            </div>
+            <div class="card-body">
+                <p class="card-text">Mark attendance for employees.</p>
+                <a href="/absen" class="btn btn-primary">Mark Absen</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-upload"></i> Add Dataset
+            </div>
+            <div class="card-body">
+                <p class="card-text">Upload new face datasets for recognition.</p>
+                <a href="/add-dataset" class="btn btn-primary">Upload Dataset</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

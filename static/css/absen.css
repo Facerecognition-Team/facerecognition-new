@@ -1,0 +1,128 @@
+/* Global Styling */
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #f8f9fa;
+    margin: 0;
+    padding: 0;
+}
+
+h1 {
+    font-weight: 600;
+    color: #1d3557;
+    margin-bottom: 20px;
+}
+
+p {
+    color: #495057;
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+}
+
+/* Button Styling */
+.btn-primary {
+    background-color: #1d3557;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    background-color: #457b9d;
+    transform: scale(1.05);
+}
+
+.btn-success {
+    background-color: #2a9d8f;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.btn-success:hover {
+    background-color: #21867a;
+    transform: scale(1.05);
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+    transform: scale(1.05);
+}
+
+/* Camera Container */
+#cameraContainer {
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+video {
+    border-radius: 8px;
+    border: 2px solid #ddd;
+}
+
+canvas {
+    display: none;
+}
+
+/* Modal Styling */
+.modal-content {
+    border-radius: 8px;
+}
+
+.modal-header {
+    background-color: #1d3557;
+    color: #ffffff;
+    border-bottom: 1px solid #ddd;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: space-between;
+    border-top: none;
+}
+
+.modal-footer .btn {
+    width: 45%;
+}
+
+/* Detected Face Container */
+#detectedFaceContainer {
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    margin-top: 20px;
+    text-align: center;
+}
+
+#detectedFaceImage {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 2px solid #ddd;
+}
+
+/* Responsiveness */
+@media (max-width: 768px) {
+    video, canvas {
+        width: 100%;
+        height: auto;
+    }
+
+    .modal-footer .btn {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+
+    .modal-footer .btn:last-child {
+        margin-bottom: 0;
+    }
+}

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Absen{% endblock %}
+
+{% block head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/absen.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Absen Wajah</h1>
+    <p>Here you can capture an image to log employee attendance.</p>
+    
+    <!-- Tombol untuk Memulai Kamera -->
+    <div class="text-center">
+        <button id="startCamera" class="btn btn-primary mb-4">Mulai Kamera</button>
+    </div>
+
+    <!-- Kontainer Kamera -->
+    <div id="cameraContainer" style="display: none;">
+        <video id="video" width="640" height="480" autoplay></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <canvas id="grayCanvas" style="display: none;"></canvas>
+        <button id="captureImage" class="btn btn-success mt-3">Ambil Gambar</button>
+    </div>
+
+    <!-- Modal Preview -->
+    <div id="previewModal" class="modal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Preview Gambar</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="previewImage" class="img-fluid" />
+                </div>
+                <div class="modal-footer">
+                    <button id="confirmImage" class="btn btn-primary">Konfirmasi</button>
+                    <button id="retakeImage" class="btn btn-secondary">Ambil Ulang</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menampilkan Gambar Wajah yang Terdeteksi -->
+    <div id="detectedFaceContainer" style="display: none;">
+        <h3>Gambar Wajah yang Terdeteksi</h3>
+        <img id="detectedFaceImage" class="img-fluid" alt="Gambar Wajah Terdeteksi" />
+    </div>
+</div>
+
+<!-- Script -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const grayCanvas = document.getElementById('grayCanvas');
+    const previewImage = document.getElementById('previewImage');
+    const startCamera = document.getElementById('startCamera');
+    const captureImage = document.getElementById('captureImage');
+    const confirmImage = document.getElementById('confirmImage');
+    const retakeImage = document.getElementById('retakeImage');
+    const cameraContainer = document.getElementById('cameraContainer');
+    const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+    const detectedFaceContainer = document.getElementById('detectedFaceContainer');
+    const detectedFaceImage = document.getElementById('detectedFaceImage');
+
+    let capturedImage = '';
+
+    // Memulai kamera
+    startCamera.addEventListener('click', async () => {
+        cameraContainer.style.display = 'block';
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+    });
+
+    // Menangkap gambar dari video dan mengonversi ke grayscale
+    captureImage.addEventListener('click', () => {
+        const ctx = canvas.getContext('2d');
+        const grayCtx = grayCanvas.getContext('2d');
+
+        // Menangkap gambar dari video
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Konversi ke grayscale
+        for (let i = 0; i < imageData.data.length; i += 4) {
+            const gray = 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2];
+            imageData.data[i] = gray;       // Red
+            imageData.data[i + 1] = gray;   // Green
+            imageData.data[i + 2] = gray;   // Blue
+        }
+
+        grayCtx.putImageData(imageData, 0, 0);
+
+        // Simpan hasil grayscale dalam Base64
+        capturedImage = grayCanvas.toDataURL('image/jpeg');
+        previewImage.src = capturedImage;
+        previewModal.show();
+    });
+
+    // Konfirmasi dan kirim ke backend
+    confirmImage.addEventListener('click', async () => {
+        previewModal.hide();
+        try {
+            const response = await fetch('/recognize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_data: capturedImage.split(',')[1] }) // Kirim data base64 tanpa header
+            });
+
+            const result = await response.json();
+            alert(result.message);
+            if (result.success) {
+                // Menampilkan gambar wajah yang terdeteksi
+                const imagePath = result.detected_face_image_path;
+                detectedFaceImage.src = imagePath;
+                detectedFaceContainer.style.display = 'block'; // Menampilkan gambar
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Terjadi kesalahan saat memproses absensi.');
+        }
+    });
+
+    // Ambil ulang gambar
+    retakeImage.addEventListener('click', () => {
+        previewModal.hide();
+    });
+});
+</script>
+{% endblock %}

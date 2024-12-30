@@ -1,0 +1,54 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Tambah Pegawai{% endblock %}
+
+{% block head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/add_pegawai.css') }}">
+{% endblock %}
+
+{% block content %}
+    <h2>Tambah Pegawai</h2>
+    <form id="add-pegawai-form">
+        <label for="nama">Nama:</label>
+        <input type="text" id="nama" name="nama" required><br>
+
+        <label for="nip">NIP:</label>
+        <input type="text" id="nip" name="nip" required><br>
+
+        <label for="nomor_telepon">Nomor Telepon:</label>
+        <input type="text" id="nomor_telepon" name="nomor_telepon" required><br>
+
+        <label for="alamat">Alamat:</label>
+        <textarea id="alamat" name="alamat" required></textarea><br>
+
+        <button type="submit">Tambah Pegawai</button>
+    </form>
+    
+    <script>
+        document.getElementById('add-pegawai-form').onsubmit = async function (e) {
+            e.preventDefault();
+    
+            const formData = {
+                nama: document.getElementById('nama').value,
+                nip: document.getElementById('nip').value,
+                nomor_telepon: document.getElementById('nomor_telepon').value,
+                alamat: document.getElementById('alamat').value,
+            };
+    
+            const response = await fetch('/tambah-pegawai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+    
+            const result = await response.json();
+            if (result.success) {
+                alert('Pegawai berhasil ditambahkan!');
+                window.location.href = '/dashboard'; // Redirect ke dashboard
+            } else {
+                alert('Gagal menambahkan pegawai: ' + result.message);
+            }
+        };
+    </script>
+    
+{% endblock %}

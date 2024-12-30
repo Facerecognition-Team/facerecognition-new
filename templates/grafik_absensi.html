@@ -1,0 +1,75 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Grafik Absensi{% endblock %}
+
+{% block head %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            width: 80%;
+            margin: auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="chart-container">
+    <h1>Grafik Absensi</h1>
+    <p>Grafik ini menunjukkan jumlah absensi per tanggal.</p>
+    <canvas id="absensiChart"></canvas>
+</div>
+
+<script>
+    // Cek apakah data grafik tersedia
+    const grafikData = {{ grafik_data | tojson | safe }};
+
+    if (grafikData.length > 0) {
+        // Ekstrak data untuk Chart.js
+        const labels = grafikData.map(data => data.tanggal);
+        const totalAbsensi = grafikData.map(data => data.total_absen);
+
+        // Inisialisasi Chart.js
+        const ctx = document.getElementById('absensiChart').getContext('2d');
+        const absensiChart = new Chart(ctx, {
+            type: 'bar', // Jenis grafik: bar
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Total Absensi',
+                    data: totalAbsensi,
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    } else {
+        // Jika tidak ada data, tampilkan pesan
+        document.querySelector('.chart-container').innerHTML = `
+            <h1>Grafik Absensi</h1>
+            <p>Data tidak tersedia untuk grafik absensi.</p>
+        `;
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Tambah Dataset{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h3 class="mb-4">Tambah Dataset Wajah</h3>
+    <div class="form-group mb-3">
+        <label for="namaPegawai">Nama Pegawai:</label>
+        <input type="text" id="namaPegawai" class="form-control" placeholder="Masukkan Nama Pegawai">
+    </div>
+    <div class="text-center">
+        <button class="btn btn-primary" id="startCapture">Mulai Pengambilan Dataset</button>
+    </div>
+
+    <div class="mt-4" id="cameraContainer" style="display: none;">
+        <video id="video" width="640" height="480" autoplay></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <p class="mt-3">Dataset terkumpul: <span id="datasetCount">0</span>/210</p>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="previewModal" class="modal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Preview Dataset</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="previewImages"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="confirmDataset">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const startCapture = document.getElementById('startCapture');
+        const datasetCount = document.getElementById('datasetCount');
+        const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+        const previewImages = document.getElementById('previewImages');
+        const confirmDataset = document.getElementById('confirmDataset');
+    
+        let capturedImages = [];
+        let namaPegawai = '';
+        let namaImagePrefix = '';
+    
+        startCapture.addEventListener('click', async () => {
+            namaPegawai = document.getElementById('namaPegawai').value.trim();
+            if (!namaPegawai) {
+                alert('Nama pegawai harus diisi!');
+                return;
+            }
+    
+            namaImagePrefix = namaPegawai.toLowerCase().replace(/\s+/g, '_');
+            document.getElementById('cameraContainer').style.display = 'block';
+    
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+    
+            const captureInterval = setInterval(() => {
+                if (capturedImages.length >= 210) {
+                    clearInterval(captureInterval);
+                    stream.getTracks().forEach(track => track.stop());
+                    previewCapturedImages();
+                    return;
+                }
+    
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/jpeg');
+                capturedImages.push(imageData);
+                datasetCount.textContent = capturedImages.length;
+            }, 100); // Ambil gambar setiap 500ms
+        });
+    
+        function previewCapturedImages() {
+            previewImages.innerHTML = '';
+            capturedImages.forEach((image, index) => {
+                const img = document.createElement('img');
+                img.src = image;
+                img.className = 'img-thumbnail m-2';
+                img.width = 100;
+                previewImages.appendChild(img);
+            });
+            previewModal.show();
+        }
+    
+        confirmDataset.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/add-dataset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nama_pegawai: namaPegawai,
+                        nama_image_prefix: namaImagePrefix,
+                        image_batch: capturedImages.map(img => img.split(',')[1]) // Remove Base64 prefix
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert(result.message);
+                    window.location.reload();
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Terjadi kesalahan saat menyimpan dataset.');
+            }
+        });
+    });
+</script>
+{% endblock %}

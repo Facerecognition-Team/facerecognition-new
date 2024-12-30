@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <h1>Welcome, {{ username }}!</h1>
+        <p>This is the admin dashboard. Use the buttons below to manage the system.</p>
+
+        <div class="features">
+            <a href="{{ url_for('tambah_pegawai') }}" class="feature-button">Tambah Pegawai</a>
+            <a href="{{ url_for('log_absen_admin') }}" class="feature-button">Log Absen</a>
+            <a href="{{ url_for('grafik_absensi') }}" class="feature-button">Grafik Absensi</a>
+        </div>
+
+        <div class="actions">
+            <a href="{{ url_for('logout') }}" class="logout-button">Logout</a>
+        </div>
+    </div>
+</body>
+</html>
