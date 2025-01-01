@@ -10,6 +10,7 @@ import os
 import base64
 from werkzeug.utils import secure_filename
 import cv2
+import json
 import numpy as np
 import face_recognition
 
@@ -207,7 +208,6 @@ def recognize():
         employee_id = None
         highest_accuracy = 0
         alert_message = None
-        detected_face_image_path = None
 
         for (x, y, w, h) in faces:
             cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
@@ -221,15 +221,7 @@ def recognize():
                 matched = True
                 highest_accuracy = 100 - conf
                 alert_message = "Wajah cocok dengan dataset."
-                conn = get_db_connection()
-                cursor = conn.cursor(dictionary=True)
-                cursor.execute("SELECT * FROM dataset WHERE id_pegawai = %s", (id,))
-                dataset = cursor.fetchone()
-                if dataset:
-                    employee_id = dataset['id_pegawai']
-                    employee_name = dataset['nama_image']
-                conn.close()
-
+                employee_id = id
                 break
             else:
                 alert_message = "Wajah tidak cocok dengan dataset."
@@ -239,6 +231,23 @@ def recognize():
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
 
+            # Ambil nama pegawai dari tabel pegawai
+            cursor.execute("SELECT nama FROM pegawai WHERE id_pegawai = %s", (employee_id,))
+            pegawai = cursor.fetchone()
+
+            if not pegawai:
+                cursor.close()
+                conn.close()
+                return jsonify({
+                    'success': False,
+                    'message': 'Pegawai tidak ditemukan dalam database.',
+                    'accuracy': round(highest_accuracy, 2),
+                    'alert': alert_message,
+                }), 404
+
+            employee_name = pegawai['nama']
+
+            # Cek apakah pegawai sudah absen hari ini
             cursor.execute("""
                 SELECT * FROM absensi 
                 WHERE id_pegawai = %s AND tanggal = %s
@@ -246,18 +255,20 @@ def recognize():
             attendance_record = cursor.fetchone()
 
             if attendance_record:
+                # Absensi keluar
                 cursor.execute("""
                     UPDATE absensi
                     SET waktu_keluar = NOW()
                     WHERE id_pegawai = %s AND tanggal = %s
                 """, (employee_id, today_date))
-                message = 'Absensi keluar berhasil'
+                message = f'Absensi keluar berhasil untuk {employee_name}'
             else:
+                # Absensi masuk
                 cursor.execute("""
                     INSERT INTO absensi (id_pegawai, nama, tanggal, waktu_masuk)
                     VALUES (%s, %s, %s, NOW())
                 """, (employee_id, employee_name, today_date))
-                message = 'Absensi masuk berhasil'
+                message = f'Absensi masuk berhasil untuk {employee_name}'
 
             conn.commit()
             cursor.close()
@@ -295,14 +306,16 @@ def add_dataset():
         cursor = conn.cursor(dictionary=True)
 
         try:
-            cursor.execute("SELECT id_pegawai FROM pegawai WHERE nama = %s", (nama_pegawai,))
+            # Cari pegawai di database
+            cursor.execute("SELECT id_pegawai, nama FROM pegawai WHERE nama = %s", (nama_pegawai,))
             pegawai = cursor.fetchone()
 
             if not pegawai:
                 return jsonify({'success': False, 'message': 'Pegawai tidak ditemukan'}), 404
 
             id_pegawai = pegawai['id_pegawai']
-            dataset_dir = os.path.join('static', 'datasets', nama_image_prefix)
+            formatted_name = nama_pegawai.lower().replace(" ", "_")
+            dataset_dir = os.path.join('static', 'datasets', formatted_name)
             os.makedirs(dataset_dir, exist_ok=True)
 
             saved_images = []
@@ -333,7 +346,11 @@ def add_dataset():
                 """, (id_pegawai, f'{nama_image_prefix}_{i + 1}.jpg', image_path))
 
             conn.commit()
-            return jsonify({'success': True, 'message': 'Dataset berhasil disimpan', 'images': saved_images}), 201
+
+            # Proses pelatihan model setelah dataset ditambahkan
+            train_model()
+
+            return jsonify({'success': True, 'message': 'Dataset berhasil disimpan dan model telah dilatih', 'images': saved_images}), 201
 
         except mysql.connector.Error as err:
             conn.rollback()
@@ -343,6 +360,125 @@ def add_dataset():
             conn.close()
 
     return render_template('add_dataset.html')
+
+
+def train_model():
+    # Koneksi ke database
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Query data pegawai
+    cursor.execute("SELECT id_pegawai, nama FROM pegawai")
+    pegawai_database = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    dataset_path = "static/datasets/"
+    label_map_path = "recognizer/label_map.json"
+    training_data_path = "recognizer/trainingdata.yml"
+
+    label_map = {}
+    faces = []
+    labels = []
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+    for pegawai in pegawai_database:
+        id_pegawai = pegawai['id_pegawai']
+        nama_pegawai = pegawai['nama']
+
+        formatted_name = nama_pegawai.lower().replace(" ", "_")
+        folder_path = os.path.join(dataset_path, formatted_name)
+
+        if os.path.exists(folder_path):
+            label_map[formatted_name] = id_pegawai
+
+            for image_name in os.listdir(folder_path):
+                image_path = os.path.join(folder_path, image_name)
+                img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+                if img is None:
+                    continue
+
+                faces_detected = face_cascade.detectMultiScale(img, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
+                for (x, y, w, h) in faces_detected:
+                    faces.append(img[y:y + h, x:x + w])
+                    labels.append(id_pegawai)
+
+    # Simpan label_map ke file JSON
+    os.makedirs(os.path.dirname(label_map_path), exist_ok=True)
+    with open(label_map_path, "w") as f:
+        json.dump(label_map, f, indent=4)
+
+    if len(faces) == 0:
+        print("Dataset tidak memiliki wajah untuk dilatih.")
+        return
+
+    recognizer = cv2.face.LBPHFaceRecognizer_create()
+    recognizer.train(faces, np.array(labels))
+    os.makedirs(os.path.dirname(training_data_path), exist_ok=True)
+    recognizer.write(training_data_path)
+
+    print("Model berhasil dilatih dan disimpan.")
+
+
+def train_model():
+    # Koneksi ke database
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Query data pegawai
+    cursor.execute("SELECT id_pegawai, nama FROM pegawai")
+    pegawai_database = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    dataset_path = "static/datasets/"
+    label_map_path = "recognizer/label_map.json"
+    training_data_path = "recognizer/trainingdata.yml"
+
+    label_map = {}
+    faces = []
+    labels = []
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+    for pegawai in pegawai_database:
+        id_pegawai = pegawai['id_pegawai']
+        nama_pegawai = pegawai['nama']
+
+        formatted_name = nama_pegawai.lower().replace(" ", "_")
+        for folder_name in os.listdir(dataset_path):
+            if folder_name.startswith(f"{id_pegawai}_") or folder_name == formatted_name:
+                label_map[folder_name] = id_pegawai
+
+                folder_path = os.path.join(dataset_path, folder_name)
+                for image_name in os.listdir(folder_path):
+                    image_path = os.path.join(folder_path, image_name)
+                    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+                    if img is None:
+                        continue
+
+                    faces_detected = face_cascade.detectMultiScale(img, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
+                    for (x, y, w, h) in faces_detected:
+                        faces.append(img[y:y + h, x:x + w])
+                        labels.append(id_pegawai)
+
+    # Simpan label_map ke file JSON
+    os.makedirs(os.path.dirname(label_map_path), exist_ok=True)
+    with open(label_map_path, "w") as f:
+        json.dump(label_map, f, indent=4)
+
+    if len(faces) == 0:
+        print("Dataset tidak memiliki wajah untuk dilatih.")
+        return
+
+    recognizer = cv2.face.LBPHFaceRecognizer_create()
+    recognizer.train(faces, np.array(labels))
+    os.makedirs(os.path.dirname(training_data_path), exist_ok=True)
+    recognizer.write(training_data_path)
+
+    print("Model berhasil dilatih dan disimpan.")
+
 
 
 # Endpoint untuk menambahkan data admin
