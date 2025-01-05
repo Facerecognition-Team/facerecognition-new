@@ -1,0 +1,111 @@
+{% extends "base_admin.html" %}
+
+{% block head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pegawai.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>List Pegawai</h1>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nama</th>
+                <th>NIP</th>
+                <th>Nomor Telepon</th>
+                <th>Alamat</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for pegawai in pegawai_list %}
+            <tr>
+                <td>{{ pegawai.id_pegawai }}</td>
+                <td>{{ pegawai.nama }}</td>
+                <td>{{ pegawai.nip }}</td>
+                <td>{{ pegawai.nomor_telepon }}</td>
+                <td>{{ pegawai.alamat }}</td>
+                <td>
+                    <button class="edit-btn" data-id="{{ pegawai.id_pegawai }}">Edit</button>
+                    <button class="delete-btn" data-id="{{ pegawai.id_pegawai }}">Hapus</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="modal" class="modal hidden">
+    <div class="modal-content">
+        <h2>Edit Pegawai</h2>
+        <form id="pegawai-form">
+            <label for="nama">Nama:</label>
+            <input type="text" id="nama" name="nama" required>
+            <label for="nip">NIP:</label>
+            <input type="text" id="nip" name="nip" required>
+            <label for="nomor_telepon">Nomor Telepon:</label>
+            <input type="text" id="nomor_telepon" name="nomor_telepon" required>
+            <label for="alamat">Alamat:</label>
+            <textarea id="alamat" name="alamat" required></textarea>
+            <button type="submit">Simpan</button>
+            <button type="button" id="close-modal">Batal</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Handle Edit
+        document.querySelectorAll('.edit-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const id = button.getAttribute('data-id');
+                const row = button.closest('tr');
+                const nama = row.children[1].textContent;
+                const nip = row.children[2].textContent;
+                const nomor_telepon = row.children[3].textContent;
+                const alamat = row.children[4].textContent;
+
+                document.getElementById('nama').value = nama;
+                document.getElementById('nip').value = nip;
+                document.getElementById('nomor_telepon').value = nomor_telepon;
+                document.getElementById('alamat').value = alamat;
+
+                document.getElementById('pegawai-form').onsubmit = async (e) => {
+                    e.preventDefault();
+                    const response = await fetch(`/pegawai/edit/${id}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            nama: document.getElementById('nama').value,
+                            nip: document.getElementById('nip').value,
+                            nomor_telepon: document.getElementById('nomor_telepon').value,
+                            alamat: document.getElementById('alamat').value,
+                        }),
+                    });
+                    if (response.ok) location.reload();
+                };
+
+                document.getElementById('modal').classList.remove('hidden');
+            });
+        });
+
+        // Handle Delete
+        document.querySelectorAll('.delete-btn').forEach(button => {
+            button.addEventListener('click', async () => {
+                const id = button.getAttribute('data-id');
+                if (confirm('Apakah Anda yakin ingin menghapus pegawai ini?')) {
+                    const response = await fetch(`/pegawai/delete/${id}`, { method: 'POST' });
+                    if (response.ok) location.reload();
+                }
+            });
+        });
+
+        // Close modal
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('modal').classList.add('hidden');
+        });
+    });
+</script>
+{% endblock %}

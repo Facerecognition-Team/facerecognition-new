@@ -6,6 +6,7 @@ from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 import mysql.connector
 import datetime
+from datetime import timedelta
 import os
 import base64
 from werkzeug.utils import secure_filename
@@ -90,9 +91,7 @@ def index():
     return render_template('index.html')
 
 # Route for log absen
-import pandas as pd
-from flask import Response, request
-from io import BytesIO
+
 
 @app.route('/log-absen-admin', methods=['GET'])
 def log_absen_admin():
@@ -102,10 +101,9 @@ def log_absen_admin():
 
     # Mengambil data absensi dari database
     cursor.execute("""
-        SELECT a.id, a.id_pegawai, a.nama, a.tanggal, 
+        SELECT a.id, a.id_pegawai, p.nama AS nama, a.tanggal, 
                TIME(a.waktu_masuk) AS waktu_masuk, 
-               TIME(a.waktu_keluar) AS waktu_keluar, 
-               p.nama AS nama 
+               TIME(a.waktu_keluar) AS waktu_keluar
         FROM absensi a 
         JOIN pegawai p ON a.id_pegawai = p.id_pegawai
     """)
@@ -118,9 +116,16 @@ def log_absen_admin():
     if 'download' in request.args:
         # Menggunakan pandas untuk membuat DataFrame dan kemudian menulis ke file Excel
         for log in logs:
-            # Mengubah waktu ke format yang sesuai (misalnya, 'HH:MM:SS')
-            log['waktu_masuk'] = log['waktu_masuk'].strftime('%H:%M:%S') if log['waktu_masuk'] else ''
-            log['waktu_keluar'] = log['waktu_keluar'].strftime('%H:%M:%S') if log['waktu_keluar'] else ''
+            # Pastikan waktu dalam format string
+            if isinstance(log['waktu_masuk'], timedelta):
+                log['waktu_masuk'] = str(log['waktu_masuk'])  # Ubah timedelta ke string
+            elif log['waktu_masuk']:
+                log['waktu_masuk'] = log['waktu_masuk'].strftime('%H:%M:%S')  # Jika objek datetime
+
+            if isinstance(log['waktu_keluar'], timedelta):
+                log['waktu_keluar'] = str(log['waktu_keluar'])  # Ubah timedelta ke string
+            elif log['waktu_keluar']:
+                log['waktu_keluar'] = log['waktu_keluar'].strftime('%H:%M:%S')  # Jika objek datetime
         
         df = pd.DataFrame(logs)
         output = BytesIO()
@@ -318,6 +323,7 @@ def add_dataset():
             dataset_dir = os.path.join('static', 'datasets', formatted_name)
             os.makedirs(dataset_dir, exist_ok=True)
 
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
             saved_images = []
 
             for i, image_data in enumerate(image_batch):
@@ -332,18 +338,23 @@ def add_dataset():
                     continue
 
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                image_path = os.path.join(dataset_dir, f'{nama_image_prefix}_{i + 1}.jpg')
-                cv2.imwrite(image_path, gray)
+                faces_detected = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
 
-                saved_images.append({
-                    'filename': f'{nama_image_prefix}_{i + 1}.jpg',
-                    'path': image_path
-                })
+                for (x, y, w, h) in faces_detected:
+                    cropped_face = gray[y:y + h, x:x + w]
+                    image_path = os.path.join(dataset_dir, f'{nama_image_prefix}_{i + 1}.jpg')
+                    cv2.imwrite(image_path, cropped_face)
 
-                cursor.execute("""
-                    INSERT INTO dataset (id_pegawai, nama_image, image_path)
-                    VALUES (%s, %s, %s)
-                """, (id_pegawai, f'{nama_image_prefix}_{i + 1}.jpg', image_path))
+                    saved_images.append({
+                        'filename': f'{nama_image_prefix}_{i + 1}.jpg',
+                        'path': image_path
+                    })
+
+                    cursor.execute("""
+                        INSERT INTO dataset (id_pegawai, nama_image, image_path)
+                        VALUES (%s, %s, %s)
+                    """, (id_pegawai, f'{nama_image_prefix}_{i + 1}.jpg', image_path))
+                    break  # Ambil hanya wajah pertama yang terdeteksi
 
             conn.commit()
 
@@ -479,6 +490,31 @@ def train_model():
 
     print("Model berhasil dilatih dan disimpan.")
 
+@app.route('/validate-pegawai', methods=['POST'])
+def validate_pegawai():
+    data = request.json
+    nama_pegawai = data.get('nama_pegawai')
+
+    if not nama_pegawai:
+        return jsonify({'success': False, 'message': 'Nama pegawai harus diisi'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT id_pegawai FROM pegawai WHERE nama = %s", (nama_pegawai,))
+        pegawai = cursor.fetchone()
+
+        if not pegawai:
+            return jsonify({'success': False, 'message': 'Pegawai tidak ditemukan'}), 404
+
+        return jsonify({'success': True, 'message': 'Pegawai valid'}), 200
+    except mysql.connector.Error as err:
+        return jsonify({'success': False, 'message': f"Database error: {err}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 
 
 # Endpoint untuk menambahkan data admin
@@ -596,135 +632,62 @@ def grafik_absensi():
     return render_template('grafik_absensi.html', grafik_data=grafik_data)
 
 
-    
+@app.route('/pegawai', methods=['GET'])
+def daftar_pegawai():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
-# Route untuk absen wajah
-# @app.route('/recognize', methods=['GET', 'POST'])
-# def recognize():
-#     if request.method == 'POST':
-#         data = request.json
-#         image_data = data.get('image_data')
+    # Ambil daftar pegawai dari database
+    cursor.execute("SELECT * FROM pegawai")
+    pegawai_list = cursor.fetchall()
 
-#         if not image_data:
-#             return jsonify({'success': False, 'message': 'Gambar tidak ditemukan'}), 400
+    cursor.close()
+    conn.close()
 
-#         try:
-#             img_data = base64.b64decode(image_data)
-#         except Exception as e:
-#             return jsonify({'success': False, 'message': f'Gagal decode gambar: {e}'}), 400
+    return render_template('pegawai.html', pegawai_list=pegawai_list, page_css='css/pegawai.css')
 
-#         np_arr = np.frombuffer(img_data, np.uint8)
-#         img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-#         if img is None:
-#             return jsonify({'success': False, 'message': 'Format gambar tidak didukung'}), 400
+@app.route('/pegawai/edit/<int:id>', methods=['POST'])
+def edit_pegawai(id):
+    data = request.json
+    nama = data.get('nama')
+    nip = data.get('nip')
+    nomor_telepon = data.get('nomor_telepon')
+    alamat = data.get('alamat')
 
-#         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-#         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    if not nama or not nip or not nomor_telepon or not alamat:
+        return jsonify({'success': False, 'message': 'Semua kolom wajib diisi'}), 400
 
-#         # Deteksi wajah dalam gambar
-#         faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE pegawai 
+            SET nama = %s, nip = %s, nomor_telepon = %s, alamat = %s 
+            WHERE id_pegawai = %s
+        """, (nama, nip, nomor_telepon, alamat, id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Pegawai berhasil diperbarui'}), 200
+    except mysql.connector.Error as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'Database error: {e}'}), 500
 
-#         # Debugging: Menampilkan jumlah wajah yang terdeteksi
-#         print(f"Jumlah wajah terdeteksi: {len(faces)}")
 
-#         if len(faces) == 0:
-#             return jsonify({'success': False, 'message': 'Wajah tidak terdeteksi'}), 404
-
-#         conn = get_db_connection()
-#         cursor = conn.cursor(dictionary=True)
-#         cursor.execute("SELECT * FROM dataset")
-#         datasets = cursor.fetchall()
-
-#         matched = False
-#         employee_name = None
-#         employee_id = None
-#         highest_accuracy = 0
-#         alert_message = None
-#         threshold = 500
-#         detected_face_image_path = None
-
-#         # Hanya ambil wajah pertama yang terdeteksi
-#         (x, y, w, h) = faces[0]
-#         face = gray[y:y + h, x:x + w]
-#         face_image = img[y:y + h, x:x + w]  # Ambil gambar wajah pertama
-
-#         # Simpan gambar wajah pertama yang terdeteksi
-#         face_filename = f"face_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-#         detected_face_image_path = os.path.join(DETECTED_FACE_FOLDER, face_filename)
-#         cv2.imwrite(detected_face_image_path, face_image)  # Simpan gambar wajah ke folder
-
-#         # Proses pencocokan wajah
-#         for dataset in datasets:
-#             dataset_image = cv2.imread(dataset['image_path'], cv2.IMREAD_GRAYSCALE)
-#             if dataset_image is None:
-#                 continue
-
-#             if face.shape != dataset_image.shape:
-#                 dataset_image = cv2.resize(dataset_image, (face.shape[1], face.shape[0]))
-
-#             error = np.mean((face.astype("float") - dataset_image.astype("float")) ** 2)
-#             accuracy = max(0, 100 - (error / threshold) * 100)
-
-#             if accuracy > highest_accuracy:
-#                 highest_accuracy = accuracy
-#                 if accuracy > 90:
-#                     alert_message = "Akurasi tinggi! Wajah cocok."
-#                 elif 75 < accuracy <= 90:
-#                     alert_message = "Akurasi cukup tinggi! Wajah hampir cocok."
-#                 else:
-#                     alert_message = "Akurasi rendah. Wajah kurang cocok."
-
-#             if error < threshold:
-#                 matched = True
-#                 employee_id = dataset['id_pegawai']
-#                 employee_name = dataset['nama_image']
-#                 break  # Keluar dari loop dataset setelah menemukan pencocokan
-
-#         if matched:
-#             today_date = datetime.date.today()
-#             cursor.execute(""" 
-#                 SELECT * FROM absensi 
-#                 WHERE id_pegawai = %s AND tanggal = %s
-#             """, (employee_id, today_date))
-#             attendance_record = cursor.fetchone()
-
-#             if attendance_record:
-#                 cursor.execute("""
-#                     UPDATE absensi
-#                     SET waktu_keluar = NOW()
-#                     WHERE id_pegawai = %s AND tanggal = %s
-#                 """, (employee_id, today_date))
-#                 message = 'Absensi keluar berhasil'
-#             else:
-#                 cursor.execute("""
-#                     INSERT INTO absensi (id_pegawai, nama, tanggal, waktu_masuk)
-#                     VALUES (%s, %s, %s, NOW())
-#                 """, (employee_id, employee_name, today_date))
-#                 message = 'Absensi masuk berhasil'
-
-#             conn.commit()
-#             cursor.close()
-#             conn.close()
-#             return jsonify({
-#                 'success': True,
-#                 'message': message,
-#                 'employee': employee_name,
-#                 'accuracy': round(highest_accuracy, 2),
-#                 'alert': alert_message,
-#                 'detected_face_image_path': detected_face_image_path  # Mengirim path gambar wajah
-#             }), 201
-#         else:
-#             cursor.close()
-#             conn.close()
-#             return jsonify({
-#                 'success': False,
-#                 'message': 'Wajah tidak cocok dengan dataset',
-#                 'accuracy': round(highest_accuracy, 2),
-#                 'alert': alert_message
-#             }), 404
-
-#     return render_template('absen.html')
+@app.route('/pegawai/delete/<int:id>', methods=['POST'])
+def delete_pegawai(id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM pegawai WHERE id_pegawai = %s", (id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Pegawai berhasil dihapus'}), 200
+    except mysql.connector.Error as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'Database error: {e}'}), 500
 
 
 

@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style_admin.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/add_pegawai.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/log_absen_admin.css') }}">
+    {% if page_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename=page_css) }}">
+    {% endif %}
 </head>
 <body>
     <!-- Navbar -->
@@ -30,6 +33,11 @@
             <li class="nav-item mb-2">
                 <a href="{{ url_for('tambah_pegawai') }}" class="nav-link text-white">
                     <i class="fas fa-user-plus"></i> Add Pegawai
+                </a>
+            </li>
+            <li class="nav-item mb-2">
+                <a href="{{ url_for('daftar_pegawai') }}" class="nav-link text-white">
+                    <i class="fas fa-calendar-check"></i> Manage Pegawai
                 </a>
             </li>
             <li class="nav-item mb-2">
@@ -73,6 +81,17 @@
                     <div class="card-body">
                         <p class="card-text">Add new employees to the system.</p>
                         <a href="/tambah-pegawai" class="btn btn-primary">Add Pegawai</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-calendar-check"></i> Manage Pegawai
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">View the list pegawai.</p>
+                        <a href="/pegawai" class="btn btn-primary">View List</a>
                     </div>
                 </div>
             </div>

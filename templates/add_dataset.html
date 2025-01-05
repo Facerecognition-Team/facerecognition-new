@@ -5,6 +5,15 @@
 {% block content %}
 <div class="container mt-5">
     <h3 class="mb-4">Tambah Dataset Wajah</h3>
+
+    <!-- Notifikasi -->
+    <div id="notification" class="alert d-none" role="alert"></div>
+
+    <!-- Loading Notification -->
+    <div id="loadingNotification" class="alert alert-info d-none" role="alert">
+        <span id="loadingMessage">Sedang memproses, mohon tunggu...</span>
+    </div>
+
     <div class="form-group mb-3">
         <label for="namaPegawai">Nama Pegawai:</label>
         <input type="text" id="namaPegawai" class="form-control" placeholder="Masukkan Nama Pegawai">
@@ -16,7 +25,8 @@
     <div class="mt-4" id="cameraContainer" style="display: none;">
         <video id="video" width="640" height="480" autoplay></video>
         <canvas id="canvas" style="display: none;"></canvas>
-        <p class="mt-3">Dataset terkumpul: <span id="datasetCount">0</span>/210</p>
+        <p class="mt-3">Dataset terkumpul: <span id="datasetCount">0</span>/100</p>
+        <p class="text-warning mt-2" id="poseNotification">Pose: Depan</p>
     </div>
 
     <!-- Preview Modal -->
@@ -42,43 +52,97 @@
         const canvas = document.getElementById('canvas');
         const startCapture = document.getElementById('startCapture');
         const datasetCount = document.getElementById('datasetCount');
+        const poseNotification = document.getElementById('poseNotification');
         const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
         const previewImages = document.getElementById('previewImages');
         const confirmDataset = document.getElementById('confirmDataset');
-    
+        const notification = document.getElementById('notification');
+        const loadingNotification = document.getElementById('loadingNotification');
+        const loadingMessage = document.getElementById('loadingMessage');
+
+        const poses = ['Depan', 'Samping Kanan', 'Samping Kiri'];
+        let currentPoseIndex = 0;
         let capturedImages = [];
         let namaPegawai = '';
         let namaImagePrefix = '';
-    
+
+        // Fungsi untuk menampilkan notifikasi
+        function showNotification(type, message) {
+            notification.className = `alert alert-${type}`;
+            notification.textContent = message;
+            notification.classList.remove('d-none');
+        }
+
+        // Fungsi untuk menampilkan loading notification
+        function showLoading(message) {
+            loadingMessage.textContent = message;
+            loadingNotification.classList.remove('d-none');
+        }
+
+        // Fungsi untuk menyembunyikan loading notification
+        function hideLoading() {
+            loadingNotification.classList.add('d-none');
+        }
+
         startCapture.addEventListener('click', async () => {
             namaPegawai = document.getElementById('namaPegawai').value.trim();
             if (!namaPegawai) {
-                alert('Nama pegawai harus diisi!');
+                showNotification('danger', 'Nama pegawai harus diisi!');
                 return;
             }
-    
-            namaImagePrefix = namaPegawai.toLowerCase().replace(/\s+/g, '_');
-            document.getElementById('cameraContainer').style.display = 'block';
-    
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            video.srcObject = stream;
-    
-            const captureInterval = setInterval(() => {
-                if (capturedImages.length >= 210) {
-                    clearInterval(captureInterval);
-                    stream.getTracks().forEach(track => track.stop());
-                    previewCapturedImages();
+
+            // Validasi nama pegawai ke server
+            try {
+                const response = await fetch('/validate-pegawai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nama_pegawai: namaPegawai })
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    showNotification('danger', result.message);
                     return;
                 }
-    
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = canvas.toDataURL('image/jpeg');
-                capturedImages.push(imageData);
-                datasetCount.textContent = capturedImages.length;
-            }, 100); // Ambil gambar setiap 500ms
+
+                showNotification('success', 'Nama pegawai valid! Mulai pengambilan dataset.');
+                namaImagePrefix = namaPegawai.toLowerCase().replace(/\s+/g, '_');
+                document.getElementById('cameraContainer').style.display = 'block';
+                poseNotification.textContent = `Pose: ${poses[currentPoseIndex]}`;
+
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+
+                const captureInterval = setInterval(() => {
+                    if (capturedImages.length >= (currentPoseIndex + 1) * 100) {
+                        clearInterval(captureInterval);
+                        stream.getTracks().forEach(track => track.stop());
+
+                        if (currentPoseIndex < poses.length - 1) {
+                            currentPoseIndex++;
+                            poseNotification.textContent = `Pose: ${poses[currentPoseIndex]}`;
+                            datasetCount.textContent = 0;
+                            capturedImages = capturedImages.slice(0, currentPoseIndex * 100);
+                            startCapture.click();
+                        } else {
+                            poseNotification.textContent = 'Semua pose selesai. Silakan periksa dataset.';
+                            previewCapturedImages();
+                        }
+                        return;
+                    }
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = canvas.toDataURL('image/jpeg');
+                    capturedImages.push(imageData);
+                    datasetCount.textContent = capturedImages.length - currentPoseIndex * 100;
+                }, 50);
+            } catch (error) {
+                showNotification('danger', 'Terjadi kesalahan saat memvalidasi nama pegawai.');
+                console.error('Error:', error);
+            }
         });
-    
+
         function previewCapturedImages() {
             previewImages.innerHTML = '';
             capturedImages.forEach((image, index) => {
@@ -90,8 +154,10 @@
             });
             previewModal.show();
         }
-    
+
         confirmDataset.addEventListener('click', async () => {
+            showLoading('Menyimpan dataset...');
+
             try {
                 const response = await fetch('/add-dataset', {
                     method: 'POST',
@@ -103,15 +169,18 @@
                     })
                 });
                 const result = await response.json();
+                hideLoading();
+
                 if (result.success) {
-                    alert(result.message);
-                    window.location.reload();
+                    showNotification('success', result.message);
+                    setTimeout(() => window.location.reload(), 2000);
                 } else {
-                    alert(result.message);
+                    showNotification('danger', result.message);
                 }
             } catch (error) {
+                hideLoading();
+                showNotification('danger', 'Terjadi kesalahan saat menyimpan dataset.');
                 console.error('Error:', error);
-                alert('Terjadi kesalahan saat menyimpan dataset.');
             }
         });
     });
