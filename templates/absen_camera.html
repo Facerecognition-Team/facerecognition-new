@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi Kamera</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        video {
+            width: 100%;
+            max-width: 600px;
+            margin: 10px 0;
+            border: 1px solid #000;
+        }
+        .button-group {
+            margin-top: 10px;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        /* Pop-up styles */
+        .popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .popup-content {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .popup-content img {
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 10px;
+        }
+        .popup-content button {
+            margin-top: 10px;
+            padding: 10px 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Absensi Kamera</h1>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display: none;"></canvas>
+
+    <div class="button-group">
+        <button id="capture">Ambil Gambar</button>
+    </div>
+
+    <!-- Pop-up container -->
+    <div id="popup" class="popup-overlay">
+        <div class="popup-content">
+            <img id="preview" alt="Preview Gambar">
+            <button id="retry">Ambil Ulang</button>
+            <button id="submit">Kirim Gambar</button>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const popup = document.getElementById('popup');
+        const preview = document.getElementById('preview');
+        const captureButton = document.getElementById('capture');
+        const retryButton = document.getElementById('retry');
+        const submitButton = document.getElementById('submit');
+
+        // Memulai kamera
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error('Gagal mengakses kamera:', err);
+                alert('Gagal mengakses kamera. Pastikan izin telah diberikan.');
+            }
+        }
+
+        // Tangkap gambar dan tampilkan di pop-up
+        captureButton.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Tampilkan gambar di elemen preview
+            preview.src = canvas.toDataURL('image/jpeg');
+            
+            // Tampilkan pop-up
+            popup.style.display = 'flex';
+        });
+
+        // Ambil ulang gambar
+        retryButton.addEventListener('click', () => {
+            popup.style.display = 'none';
+        });
+
+        // Kirim gambar ke backend
+        submitButton.addEventListener('click', async () => {
+            const imageData = preview.src.split(',')[1]; // Base64 data
+            const response = await fetch('/recognize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_data: imageData })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                alert(result.message);
+            } else {
+                alert(`Error: ${result.message}`);
+            }
+
+            // Tutup pop-up setelah pengiriman
+            popup.style.display = 'none';
+        });
+
+        // Mulai kamera saat halaman dimuat
+        window.onload = startCamera;
+    </script>
+</body>
+</html>

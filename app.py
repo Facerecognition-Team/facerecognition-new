@@ -171,6 +171,7 @@ def log_absen():
 # def absen():
 #     return render_template('absenn.html')
 
+
 # Route for add dataset
 @app.route('/recognize', methods=['GET', 'POST'])
 def recognize():
@@ -295,6 +296,10 @@ def recognize():
             }), 404
 
     return render_template('absen.html', page_css='css/absen.css')
+
+@app.route('/absen', methods=['GET'])
+def absen():
+    return render_template('absen_camera.html', page_css='css/absen_camera.css')
 
 @app.route('/add-dataset', methods=['GET', 'POST'])
 def add_dataset():
@@ -692,5 +697,5 @@ def delete_pegawai(id):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
 
